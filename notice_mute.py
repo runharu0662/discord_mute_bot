@@ -106,7 +106,7 @@ async def reminder_task(guild_id: int, member_id: int, vc_id_snapshot: Optional[
             )
             dest = await get_messageable_for_voice(vc_now)
             if dest:
-                text = f"{member.display_name} さんは {REMINDER_MINUTES} ふん以上ミュートちゅうです"
+                text = f"{member.display_name} さんは {REMINDER_MINUTES} ふん以上ミュートです"
                 print(f"[NOTIFY] {text}")
                 await dest.send(text)
 
@@ -171,7 +171,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
 async def muted(ctx: commands.Context):
     """現在のVCでミュートしている人を列挙"""
     if not ctx.author.voice or not ctx.author.voice.channel:
-        await ctx.reply("ボイスチャンネルに参加してください。")
+        await ctx.reply("ボイスチャンネルにさんかしてください。")
         return
     vc: discord.VoiceChannel = ctx.author.voice.channel  # type: ignore
     ms = [m for m in vc.members if is_muted_state(m.voice)]
