@@ -13,7 +13,6 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 REMINDER_MINUTES = int(os.getenv("REMINDER_MINUTES", "5"))
 REPEAT_INTERVAL_MINUTES = int(os.getenv("REPEAT_INTERVAL_MINUTES", "30"))
-POST_IMMEDIATE = os.getenv("POST_IMMEDIATE", "1") == "1"
 COUNT_DEAF_AS_MUTE = os.getenv("COUNT_DEAF_AS_MUTE", "1") == "1"
 FALLBACK_TEXT_CHANNEL_ID = int(os.getenv("FALLBACK_TEXT_CHANNEL_ID", "0"))
 
@@ -56,32 +55,10 @@ async def get_messageable_for_voice(vc: Optional[discord.VoiceChannel]) -> Optio
             return ch
     return None
 
-async def post_immediate(member: discord.Member, before: Optional[discord.VoiceState], after: Optional[discord.VoiceState]):
-    """ミュート開始/解除の即時通知"""
-    if not POST_IMMEDIATE:
-        return
-    vc = after.channel if after and after.channel else before.channel if before and before.channel else None
-    dest = await get_messageable_for_voice(vc)
-    if not dest:
-        return
-
-    before_m = is_muted_state(before)
-    after_m = is_muted_state(after)
-
-    if not before_m and after_m:
-        text = f"{member.display_name} さんがミュートになりました。"
-        print(f"[IMMEDIATE] {text}")
-        await dest.send(text)
-    elif before_m and not after_m:
-        text = f"{member.display_name} さんがミュートを解除しました。"
-        print(f"[IMMEDIATE] {text}")
-        await dest.send(text)
-
 # ==============================
-# ミュート検知タスク
+# ミュート検知タスク（5分後に通知→以後30分毎に再通知）
 # ==============================
 async def reminder_task(guild_id: int, member_id: int, vc_id_snapshot: Optional[int]) -> None:
-    """5分後に通知→以後30分ごとに再通知"""
     try:
         print(f"[TASK START] guild={guild_id}, member={member_id}")
         await asyncio.sleep(REMINDER_MINUTES * 60)
@@ -106,11 +83,11 @@ async def reminder_task(guild_id: int, member_id: int, vc_id_snapshot: Optional[
             )
             dest = await get_messageable_for_voice(vc_now)
             if dest:
-                text = f"{member.display_name} さんは {REMINDER_MINUTES} ふん以上ミュートです"
+                text = f"{member.display_name} さんは {REMINDER_MINUTES} 分以上ミュートです。次回通知は {REPEAT_INTERVAL_MINUTES} 分後です。"
                 print(f"[NOTIFY] {text}")
                 await dest.send(text)
 
-            # 30分ごと再通知
+            # 30分ごと再通知（途中で解除されたら終了）
             check_interval = 10
             loops = max(1, (REPEAT_INTERVAL_MINUTES * 60) // check_interval)
             for _ in range(loops):
@@ -154,8 +131,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     now_muted = is_muted_state(after)
     print(f"[VOICE UPDATE] {member.display_name}: was_muted={was_muted}, now_muted={now_muted}")
 
-    await post_immediate(member, before, after)
-
+    # 即時通知はなし（開始/解除メッセージは送らない）
     if now_muted and not was_muted:
         print(f"[TIMER START] {member.display_name}")
         start_or_replace_timer(member)
